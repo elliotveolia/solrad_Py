@@ -1,0 +1,24 @@
+1. Smoke Impact Magnitude
+   - Local smoke: GHI drops 11-17%, DNI drops 32-42% (Corwin et al.)
+   - Transported smoke: GHI <5% (but DNI still sensitive)
+   - Peak hour losses: 10-30% (Juliano et al.)
+
+2. Forecasting Error Severity
+   - NYISO overpredicted by 50% during smoke (Bartram et al.)
+   - Hour-ahead forecasts overpredicted by 10-50% (Juliano et al.)
+   - Your project: PJM likely faces similar issues
+
+3. Solution Approach
+   - Use HRRR-Smoke data (AOD, DSWRF) → R² = 0.85 (Bartram et al.)
+   - Integrate aerosol data into weather models → 50% error reduction (Juliano et al.)
+   - Machine learning (HGBM) outperforms traditional models
+
+4. Geographic Relevance
+   - NYISO (adjacent to PJM) already experiencing this
+   - Transported smoke affects DNI significantly
+   - PJM likely affected by smoke from Western fires
+
+5. Secondary Variables
+   - Wind speed correlation (Bertoletti et al.)
+   - Spectral properties of smoke (Masoom et al.)
+   - PM2.5 and AOT correlations

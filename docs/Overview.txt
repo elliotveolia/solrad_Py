@@ -1,0 +1,39 @@
+1. Bartram et al. (2025) — Predicting solar photovoltaic generation impacted by severe wildfire smoke
+
+    Summary: This study addresses the severe overprediction of solar PV output by the New York Independent System Operator (NYISO) during the 2023 Canadian wildfires. The authors developed machine learning models (specifically a Histogram Gradient Boosting Model, HGBM) using newly available public data from the High-Resolution Rapid Refresh Smoke (HRRR-Smoke) forecasting system, including Aerosol Optical Depth (AOD) and downward shortwave radiation flux (DSWRF). By incorporating upsampling strategies to handle the rarity of wildfire events, their model achieved an $R^2$ value of up to 0.85 during severe smoke periods, significantly outperforming NYISO's $R^2$ of 0.50.
+    
+    Project Fit (Excellent): This is highly relevant to the project. It focuses on the Northeast U.S. (NYISO, which is adjacent to PJM), directly addresses day-ahead forecast errors caused by wildfire smoke, and demonstrates how to utilize real-time, open-source smoke forecast products (HRRR-Smoke) to improve hourly solar capacity projections.
+
+2. Juliano et al. (2022) — Smoke from 2020 United States wildfires responsible for substantial solar energy forecast errors
+
+    Summary: This paper investigates the impact of the September 2020 Western U.S. wildfires on solar energy forecasts. Wildfire smoke caused a 10%–30% reduction in solar power production during peak hours at California Independent System Operator (CAISO) sites, while hour-ahead forecasts overpredicted production by 10%–50%. The study demonstrates that initializing the WRF-Solar numerical weather prediction model with GEOS-5 aerosol fields (instead of a monthly climatology) improves day-ahead GHI and DNI bias forecasts by nearly 50%.
+    
+    Project Fit (Excellent): This paper provides the physical and meteorological backing for the literature review. It quantifies peak-hour solar generation losses and proves that integrating dynamic biomass burning aerosol data into weather models dramatically reduces forecasting errors.
+
+3. Corwin et al. (2025) — Solar energy resource availability under extreme and historical wildfire smoke conditions
+
+    Summary: This study quantifies the impact of local versus transported wildfire smoke on GHI and DNI across the contiguous United States (CONUS) from 2006 to 2021. It finds that while local smoke can cause massive daily declines in GHI (11%–17%) and DNI (32%–42%) in California, the average impact of transported smoke on GHI across the rest of the U.S. is relatively minimal (<5%). However, DNI is highly sensitive to transported smoke, showing persistent losses far downwind.
+    
+    Project Fit (Excellent): This paper is crucial for understanding the spatial scale of smoke impacts. It helps  distinguish between the severe, localized impacts near active fires and the milder, diffuse impacts of transported smoke on GHI (the primary resource for PV), which is highly relevant when projecting cloud cover and smoke transport over PJM.
+
+4. Masoom et al. (2023) — Investigation of the effects of the Greek extreme wildfires of August 2021 on air quality and spectral solar irradiance
+
+    Summary: This paper analyzes the spectral attenuation of solar irradiance caused by extreme wildfires and Saharan dust in Greece in August 2021. The wildfire smoke led to a decrease in daily global horizontal irradiance (GHI) of up to 17% and daily photosynthetically active radiation (PAR) of up to 21%. It highlights that smoke aerosols have a much stronger spectral dependence and higher light-absorbing capacity than dust, leading to more severe GHI attenuation.
+    
+    Project Fit (Very Good): This paper provides valuable spectral and physical details on how smoke particles scatter and absorb light compared to other aerosols (like dust). This is useful for understanding the microphysical properties of smoke that you might need to account for in radiative transfer modeling.
+
+5. Bertoletti et al. (2022) — Wildfire Smoke, Air Quality, and Renewable Energy—Examining the Impacts of the 2020 Wildfire Season in Washington State
+
+    Summary: This study examines the correlation between PM2.5, AOT, and solar irradiance during the 2020 wildfire season in Washington. It also analyzes wind speeds, finding that wind speeds were 17% to 45% slower during periods of high wildfire 
+    
+    Project Fit (Good): While less focused on advanced forecasting models, this paper introduces an interesting secondary variable: wind speed. Slower wind speeds during smoke events can reduce wind power generation and increase solar panel temperatures (reducing PV efficiency), compounding the grid's peak capacity challenges.
+
+6. Pineda & Parada-Acosta (2026) — Technical assessment of the Association Between Air Quality Index and Solar Irradiance in El Progreso, Yoro, Honduras
+    Project Fit (Bad)
+
+        
+Summary:
+
+
+
+ 

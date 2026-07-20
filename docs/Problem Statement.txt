@@ -1,0 +1,21 @@
+PROBLEM STATEMENT:
+"Improve solar PV generation forecasts for PJM during wildfire smoke events
+by incorporating aerosol optical depth (AOD) and smoke forecasts into
+machine learning models, similar to Bartram et al.'s approach for NYISO."
+
+KEY VARIABLES TO COLLECT:
+✓ Solar irradiance (GHI, DNI)
+✓ Aerosol Optical Depth (AOD) - from HRRR-Smoke
+✓ Downward Shortwave Radiation Flux (DSWRF)
+✓ Air Quality Index (AQI) / PM2.5
+✓ Cloud cover
+✓ Wind speed
+✓ Historical PJM load data
+✓ Smoke event indicators
+
+METHODOLOGY:
+- Follow Bartram et al. (2025) approach
+- Use Histogram Gradient Boosting Model (HGBM)
+- Incorporate HRRR-Smoke data
+- Handle class imbalance (rare smoke events) with upsampling
+- Target: R² ≥ 0.80 during smoke periods

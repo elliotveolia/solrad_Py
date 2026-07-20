@@ -1,0 +1,14 @@
+- What exactly are we predicting?
+  * Solar irradiance levels?
+  * Peak demand times?
+  * Load drops due to smoke?
+
+- Who is the end user?
+  * Grid operators?
+  * Utility companies?
+  * Researchers?
+
+- What's the business value?
+  * Better grid management?
+  * Cost savings?
+  * Risk mitigation?
