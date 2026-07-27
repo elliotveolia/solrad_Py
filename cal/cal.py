@@ -3,7 +3,7 @@ from datetime import datetime
 import plotly.graph_objects as go
 import sys
 from plotly.subplots import make_subplots
-from cal.caiso import fetch_caiso_load_data, get_california_weather, align_datasets
+from caiso import fetch_caiso_load_data, get_california_weather, align_datasets
 import numpy as np
 from scipy import stats
 import pandas as pd
@@ -14,19 +14,17 @@ end = datetime(2025, 12, 31)
 
 #Generate data sets
 #actual_data, forcast_data = fetch_caiso_load_data(start, end)
-#weather_data = get_california_weather(start, end)
+weather_data = get_california_weather(start, end)
 
 
 # Load the actual load data
-#actual_load = pd.read_csv('../data/caiso_actual_load.csv')
-#forecasted_load = pd.read_csv('../data/caiso_forecasted_load.csv')
-#weather_load = pd.read_csv('../data/california_weather.csv')
+actual_load = pd.read_csv('../data/caiso_actual_load.csv')
+forecasted_load = pd.read_csv('../data/caiso_forecasted_load.csv')
+weather_load = pd.read_csv('../data/california_weather.csv')
 
 
 # Run alignment
-#aligned_data = align_datasets(actual_load, forecasted_load, weather_load)
-
-
+aligned_data = align_datasets(actual_load, forecasted_load, weather_load)
 
 
 def quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=10):
@@ -166,7 +164,7 @@ def quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=1
 
     return results_df
 
-#fire_impact = quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=3)
+fire_impact = quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=3)
 
 
 def analyze_driving_variables(fire_impact_df):
@@ -358,7 +356,7 @@ def analyze_driving_variables(fire_impact_df):
 
 
 # Run analysis
-#analysis_results, regression_model = analyze_driving_variables(fire_impact)
+analysis_results, regression_model = analyze_driving_variables(fire_impact)
 
 
 
