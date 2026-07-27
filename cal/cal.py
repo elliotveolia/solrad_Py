@@ -13,14 +13,17 @@ start = datetime(2020, 1, 1)
 end = datetime(2025, 12, 31)
 
 #Generate data sets
-#actual_data, forcast_data = fetch_caiso_load_data(start, end)
-weather_data = get_california_weather(start, end)
+gen = True
+if gen:
+    actual_data, forcast_data = fetch_caiso_load_data(start, end)
+    weather_data = get_california_weather(start, end)
+    sys.exit()
 
 
 # Load the actual load data
-actual_load = pd.read_csv('../data/caiso_actual_load.csv')
-forecasted_load = pd.read_csv('../data/caiso_forecasted_load.csv')
-weather_load = pd.read_csv('../data/california_weather.csv')
+actual_load = pd.read_csv('../data/model/caiso_actual_load.csv')
+forecasted_load = pd.read_csv('../data/model/caiso_forecasted_load.csv')
+weather_load = pd.read_csv('../data/model/california_weather.csv')
 
 
 # Run alignment

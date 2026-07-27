@@ -41,7 +41,7 @@ def fetch_caiso_load_data(start_date, end_date):
         print(actual_load.head())
 
         # Save as CSV
-        actual_load.to_csv('../data/caiso_actual_load.csv', index=False)
+        actual_load.to_csv('../data/model/caiso_actual_load.csv', index=False)
         print("  ✓ Saved to caiso_actual_load.csv")
 
         # Get FORECASTED/PREDICTED load data
@@ -57,7 +57,7 @@ def fetch_caiso_load_data(start_date, end_date):
         print(forecasted_load.head())
 
         # Save as CSV
-        forecasted_load.to_csv('../data/caiso_forecasted_load.csv', index=False)
+        forecasted_load.to_csv('../data/model/caiso_forecasted_load.csv', index=False)
         print("  ✓ Saved to caiso_forecasted_load.csv")
 
         # Compare them
@@ -78,7 +78,7 @@ def fetch_caiso_load_data(start_date, end_date):
 
 
 def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945,
-                           save_path='../data/california_weather.csv'):
+                           save_path='../data/model/california_weather.csv'):
     """
     Fetch weather data + smoke/AQI proxy + solar irradiance.
     """
