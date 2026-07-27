@@ -19,6 +19,8 @@ dependencies = [
     "xgboost>=3.3.0",
     "gridstatus>=0.34.0",
     "ipykernel>=7.3.0",
+    "noaa>=0.2.1",
+    "noaa-sdk>=0.1.21",
 ]
 [tool.setuptools.packages.find]
 where = ["."]

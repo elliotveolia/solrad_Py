@@ -1,5 +1,7 @@
 import gridstatus
+from noaa_sdk import noaa
 from datetime import datetime
+import pandas as pd
 
 
 def fetch_caiso_load_data(start_date, end_date):
@@ -73,4 +75,47 @@ def fetch_caiso_load_data(start_date, end_date):
         import traceback
         traceback.print_exc()
         return None, None
+
+
+
+def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, save_path='../data/california_weather.csv'):
+    """
+    Fetch weather data for central California from NOAA and save to file.
+
+    Parameters:
+    -----------
+    start_date : str or datetime
+        Start date in format 'YYYY-MM-DD' or datetime object
+    end_date : str or datetime
+        End date in format 'YYYY-MM-DD' or datetime object
+    lat : float
+        Latitude (default: Central California)
+    lon : float
+        Longitude (default: Central California)
+    save_path : str
+        File path to save data (default: 'california_weather.csv')
+
+    Returns:
+    --------
+    pd.DataFrame : Weather observations data
+    """
+
+    observations = noaa.NoaaObservations()
+
+    try:
+        obs = observations.query(lat=lat, lon=lon, output_format='json')
+
+        # Convert to DataFrame
+        df = pd.DataFrame(obs['features'])
+
+        # Save to CSV
+        df.to_csv(save_path, index=False)
+        print(f"Weather data saved to {save_path}")
+
+        return df
+
+    except Exception as e:
+        print(f"Error fetching weather data: {e}")
+        return None
+
 
