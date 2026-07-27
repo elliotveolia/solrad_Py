@@ -29,7 +29,6 @@ weather_load = pd.read_csv('../data/model/california_weather.csv')
 # Run alignment
 aligned_data = align_datasets(actual_load, forecasted_load, weather_load)
 
-
 def quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=10):
     """
     Quantify load drop using only PRE-FIRE forecasts.
@@ -168,7 +167,6 @@ def quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=1
     return results_df
 
 fire_impact = quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=3)
-
 
 def analyze_driving_variables(fire_impact_df):
     """
