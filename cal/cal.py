@@ -1,8 +1,7 @@
-import pandas as pd
-from datetime import datetime
-import plotly.graph_objects as go
+from datetime import datetime, timedelta
 import sys
-from plotly.subplots import make_subplots
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor
 from caiso import fetch_caiso_load_data, get_california_weather, align_datasets
 import numpy as np
 from scipy import stats
@@ -13,7 +12,7 @@ start = datetime(2020, 1, 1)
 end = datetime(2025, 12, 31)
 
 #Generate data sets
-gen = True
+gen = False
 if gen:
     actual_data, forcast_data = fetch_caiso_load_data(start, end)
     weather_data = get_california_weather(start, end)
@@ -25,9 +24,6 @@ actual_load = pd.read_csv('../data/model/caiso_actual_load.csv')
 forecasted_load = pd.read_csv('../data/model/caiso_forecasted_load.csv')
 weather_load = pd.read_csv('../data/model/california_weather.csv')
 
-
-# Run alignment
-aligned_data = align_datasets(actual_load, forecasted_load, weather_load)
 
 def quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=10):
     """
@@ -166,7 +162,6 @@ def quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=1
 
     return results_df
 
-fire_impact = quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=3)
 
 def analyze_driving_variables(fire_impact_df):
     """
@@ -356,8 +351,126 @@ def analyze_driving_variables(fire_impact_df):
     return analysis_df, model
 
 
-# Run analysis
+def prepare_training_data(aligned_data, fire_impact_df, lookback_days=5):
+    """
+    Prepare training data for the predictive model.
+    Creates features from historical data and fire impact patterns.
+    """
+
+    # Merge aligned data with fire impact information
+    aligned_data['Time'] = pd.to_datetime(aligned_data['Time'], utc=True)
+    aligned_data['date'] = aligned_data['Time'].dt.date
+
+    # Create fire indicator (1 if during fire, 0 otherwise)
+    fire_dates = set()
+    for _, row in fire_impact_df.iterrows():
+        fire_start = pd.to_datetime(row['fire_start']).date()
+        fire_end = pd.to_datetime(row['fire_end_analyzed']).date()
+        current_date = fire_start
+        while current_date <= fire_end:
+            fire_dates.add(current_date)
+            current_date += timedelta(days=1)
+
+    aligned_data['is_fire'] = aligned_data['date'].isin(fire_dates).astype(int)
+
+    # Create lagged features (previous hours' data)
+    for lag in [1, 6, 24]:  # 1 hour, 6 hours, 1 day ago
+        aligned_data[f'actual_load_lag_{lag}h'] = aligned_data['actual_load_mean'].shift(lag)
+        aligned_data[f'forecast_load_lag_{lag}h'] = aligned_data['forecast_load'].shift(lag)
+        aligned_data[f'temperature_lag_{lag}h'] = aligned_data['temperature'].shift(lag)
+        aligned_data[f'solar_irradiance_lag_{lag}h'] = aligned_data['solar_irradiance'].shift(lag)
+
+    # Create rolling averages
+    for window in [6, 24]:  # 6 hours, 1 day
+        aligned_data[f'actual_load_rolling_{window}h'] = aligned_data['actual_load_mean'].rolling(window).mean()
+        aligned_data[f'forecast_load_rolling_{window}h'] = aligned_data['forecast_load'].rolling(window).mean()
+
+    # Extract time features
+    aligned_data['hour'] = aligned_data['Time'].dt.hour
+    aligned_data['day_of_week'] = aligned_data['Time'].dt.dayofweek
+    aligned_data['month'] = aligned_data['Time'].dt.month
+
+    # Create cyclical features for hour and day
+    aligned_data['hour_sin'] = np.sin(2 * np.pi * aligned_data['hour'] / 24)
+    aligned_data['hour_cos'] = np.cos(2 * np.pi * aligned_data['hour'] / 24)
+    aligned_data['day_sin'] = np.sin(2 * np.pi * aligned_data['day_of_week'] / 7)
+    aligned_data['day_cos'] = np.cos(2 * np.pi * aligned_data['day_of_week'] / 7)
+
+    # Drop rows with NaN values
+    training_data = aligned_data.dropna()
+
+    print(f"Training data shape: {training_data.shape}")
+    print(f"Fire events in training data: {training_data['is_fire'].sum()} hours")
+    print(f"Non-fire events in training data: {(1 - training_data['is_fire']).sum()} hours")
+
+    return training_data
+
+
+def build_wildfire_load_model(training_data, model_type='random_forest'):
+    """
+    Build a model to predict load during wildfire conditions.
+    """
+
+    # Define features
+    feature_cols = [
+        'forecast_load', 'temperature', 'cloudcover', 'humidity', 'solar_irradiance', 'smoke_aqi_proxy',
+        'is_fire', 'hour', 'day_of_week', 'month',
+        'actual_load_lag_1h', 'actual_load_lag_6h', 'actual_load_lag_24h',
+        'forecast_load_lag_1h', 'forecast_load_lag_6h', 'forecast_load_lag_24h',
+        'temperature_lag_1h', 'temperature_lag_6h', 'temperature_lag_24h',
+        'solar_irradiance_lag_1h', 'solar_irradiance_lag_6h', 'solar_irradiance_lag_24h',
+        'actual_load_rolling_6h', 'actual_load_rolling_24h',
+        'forecast_load_rolling_6h', 'forecast_load_rolling_24h',
+        'hour_sin', 'hour_cos', 'day_sin', 'day_cos'
+    ]
+
+    # Filter to only available columns
+    available_features = [col for col in feature_cols if col in training_data.columns]
+
+    X = training_data[available_features]
+    y = training_data['actual_load_mean']
+
+    print(f"Features used: {len(available_features)}")
+    print(f"Training samples: {len(X)}")
+
+    # Standardize features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Build model
+    if model_type == 'random_forest':
+        model = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=20,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=42,
+            n_jobs=-1
+        )
+    else:
+        model = LinearRegression()
+
+    model.fit(X_scaled, y)
+
+    # Calculate R-squared
+    train_score = model.score(X_scaled, y)
+    print(f"\nModel R-squared: {train_score:.4f}")
+
+    # Feature importance (for Random Forest)
+    if model_type == 'random_forest':
+        feature_importance = pd.DataFrame({
+            'feature': available_features,
+            'importance': model.feature_importances_
+        }).sort_values('importance', ascending=False)
+
+        print("\nTop 10 Most Important Features:")
+        print(feature_importance.head(10))
+
+    return model, scaler, available_features
+
+
+# Run alignment
+aligned_data = align_datasets(actual_load, forecasted_load, weather_load)
+fire_impact = quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=3)
 analysis_results, regression_model = analyze_driving_variables(fire_impact)
-
-
-
+train_data = prepare_training_data(aligned_data, fire_impact)
