@@ -77,66 +77,60 @@ def fetch_caiso_load_data(start_date, end_date):
         return None, None
 
 
-def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, save_path='california_weather.csv'):
+def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945,
+                           save_path='../data/california_weather.csv'):
     """
-    Fetch historical weather data AND air quality data using Open-Meteo and AirNow APIs.
-    Returns hourly data with temperature and air quality metrics.
+    Fetch weather data + smoke/AQI proxy + solar irradiance.
     """
 
     try:
-        # Make sure dates are strings in YYYY-MM-DD format
         if not isinstance(start_date, str):
             start_date = start_date.strftime('%Y-%m-%d')
         if not isinstance(end_date, str):
             end_date = end_date.strftime('%Y-%m-%d')
 
-        print(f"Fetching weather and air quality data from {start_date} to {end_date}...")
+        print(f"Fetching weather data from {start_date} to {end_date}...")
 
-        # 1. WEATHER DATA - Open-Meteo API
-        weather_url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&hourly=temperature_2m,cloudcover,precipitation&timezone=America/Los_Angeles"
+        # WEATHER DATA - Open-Meteo API with solar radiation
+        weather_url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&hourly=temperature_2m,cloudcover,precipitation,relative_humidity_2m,shortwave_radiation&timezone=America/Los_Angeles"
 
         weather_response = requests.get(weather_url)
         weather_data = weather_response.json()
 
         if weather_response.status_code != 200:
-            print(f"Weather Error: {weather_data.get('reason', 'Unknown error')}")
+            print(f"Weather Error")
             return None
-
-        if 'hourly' not in weather_data:
-            print("No hourly weather data in response")
-            return None
-
-        # 2. AIR QUALITY DATA - EPA AirNow API (requires free API key)
-        # Alternative: Use WAQI (World Air Quality Index) which doesn't require key
-        print("Fetching air quality data...")
-
-        # Using WAQI API (free, no key required for historical data)
-        aqi_url = f"https://api.waqi.info/feed/geo:{lat};{lon}/?token=demo"
-
-        try:
-            aqi_response = requests.get(aqi_url)
-            aqi_data = aqi_response.json()
-            print(f"Air quality data retrieved: {aqi_data.get('status', 'unknown')}")
-        except Exception as e:
-            print(f"Warning: Could not fetch real-time AQI data: {e}")
-            aqi_data = None
 
         # Convert weather to DataFrame
         df = pd.DataFrame({
             'time': weather_data['hourly']['time'],
-            'temperature': weather_data['hourly']['temperature_2m'],
+            'temperature_celsius': weather_data['hourly']['temperature_2m'],
             'cloudcover': weather_data['hourly']['cloudcover'],
-            'precipitation': weather_data['hourly']['precipitation']
+            'precipitation': weather_data['hourly']['precipitation'],
+            'humidity': weather_data['hourly']['relative_humidity_2m'],
+            'solar_irradiance': weather_data['hourly']['shortwave_radiation']  # NEW
         })
 
-        # For now, we'll use cloudcover as a proxy for smoke/air quality
-        # (smoke increases cloudcover and reduces visibility)
-        # In production, you'd integrate real AQI data
-        df['aqi_proxy'] = df['cloudcover']  # Placeholder
+        # Convert temperature to Fahrenheit
+        df['temperature'] = (df['temperature_celsius'] * 9 / 5) + 32
+        df = df.drop('temperature_celsius', axis=1)
+
+        # Create smoke AQI proxy (combination of cloudcover and humidity)
+        df['smoke_aqi_proxy'] = (df['cloudcover'] * 0.6 + df['humidity'] * 0.4)
+
+        # Extract hour of day for time-of-day analysis
+        df['hour'] = pd.to_datetime(df['time']).dt.hour
+
+        # Reorder columns
+        df = df[['time', 'hour', 'temperature', 'cloudcover', 'humidity', 'precipitation',
+                 'solar_irradiance', 'smoke_aqi_proxy']]
 
         df.to_csv(save_path, index=False)
-        print(f"Retrieved {len(df)} hours of data")
-        print(f"Weather data saved to {save_path}")
+        print(f"\nRetrieved {len(df)} hours of data")
+        print(f"Data saved to {save_path}")
+        print(f"\nColumns: {df.columns.tolist()}")
+        print(f"Temperature range: {df['temperature'].min():.1f}°F to {df['temperature'].max():.1f}°F")
+        print(f"Solar irradiance range: {df['solar_irradiance'].min():.1f} to {df['solar_irradiance'].max():.1f} W/m²")
 
         return df
 
@@ -147,7 +141,7 @@ def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, sav
         return None
 
 
-def align_datasets(actual_load, forecasted_load, weather_load, debug = False):
+def align_datasets(actual_load, forecasted_load, weather_load):
     """
     Align actual load, forecasted load, and weather data by hour.
     All datasets converted to hourly.
@@ -170,7 +164,8 @@ def align_datasets(actual_load, forecasted_load, weather_load, debug = False):
 
     # Weather is already hourly, just rename
     weather_hourly = weather_load.copy()
-    weather_hourly.columns = ['Time', 'temperature', 'cloudcover', 'precipitation']
+    weather_hourly.columns = ['Time', 'hour', 'temperature', 'cloudcover', 'humidity', 'precipitation',
+                              'solar_irradiance', 'smoke_aqi_proxy']
 
     # Merge all datasets on Time
     aligned_data = actual_hourly.copy()
@@ -179,12 +174,11 @@ def align_datasets(actual_load, forecasted_load, weather_load, debug = False):
 
     # Sort by time
     aligned_data = aligned_data.sort_values('Time').reset_index(drop=True)
-    if debug:
-        print(f"Aligned dataset shape: {aligned_data.shape}")
-        print(f"Time range: {aligned_data['Time'].min()} to {aligned_data['Time'].max()}")
-        print(f"\nAligned data:\n{aligned_data.head(10)}")
-        print(f"\nMissing values:\n{aligned_data.isnull().sum()}")
 
-    aligned_data.to_csv('../data/aligned_data_hourly.csv', index=False)
+    print(f"Aligned dataset shape: {aligned_data.shape}")
+    print(f"Time range: {aligned_data['Time'].min()} to {aligned_data['Time'].max()}")
+    print(f"\nAligned data:\n{aligned_data.head(10)}")
+    print(f"\nMissing values:\n{aligned_data.isnull().sum()}")
+    print(f"\nColumns: {aligned_data.columns.tolist()}")
 
     return aligned_data
