@@ -106,10 +106,10 @@ def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, sav
         if not isinstance(end_date, str):
             end_date = end_date.strftime('%Y-%m-%d')
 
-        print(f"Fetching data from {start_date} to {end_date}...")
+        print(f"Fetching hourly data from {start_date} to {end_date}...")
 
-        # Open-Meteo API (free, no key required)
-        url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&daily=temperature_2m_max,temperature_2m_min,cloudcover_mean,precipitation_sum&timezone=America/Los_Angeles"
+        # Open-Meteo API - hourly data
+        url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&hourly=temperature_2m,cloudcover,precipitation&timezone=America/Los_Angeles"
 
         response = requests.get(url)
         data = response.json()
@@ -118,21 +118,20 @@ def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, sav
             print(f"Error: {data.get('reason', data.get('error', 'Unknown error'))}")
             return None
 
-        if 'daily' not in data:
-            print("No daily data in response")
+        if 'hourly' not in data:
+            print("No hourly data in response")
             return None
 
         # Convert to DataFrame
         df = pd.DataFrame({
-            'date': data['daily']['time'],
-            'temp_max': data['daily']['temperature_2m_max'],
-            'temp_min': data['daily']['temperature_2m_min'],
-            'cloudcover': data['daily']['cloudcover_mean'],
-            'precipitation': data['daily']['precipitation_sum']
+            'time': data['hourly']['time'],
+            'temperature': data['hourly']['temperature_2m'],
+            'cloudcover': data['hourly']['cloudcover'],
+            'precipitation': data['hourly']['precipitation']
         })
 
         df.to_csv(save_path, index=False)
-        print(f"Retrieved {len(df)} days of data")
+        print(f"Retrieved {len(df)} hours of data")
         print(f"Weather data saved to {save_path}")
 
         return df
@@ -142,3 +141,46 @@ def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, sav
         import traceback
         traceback.print_exc()
         return None
+
+
+def align_datasets(actual_load, forecasted_load, weather_load, debug = False):
+    """
+    Align actual load, forecasted load, and weather data by hour.
+    All datasets converted to hourly.
+    """
+
+    # Convert Time columns to datetime (utc=True to handle timezone)
+    actual_load['Time'] = pd.to_datetime(actual_load['Time'], utc=True)
+    forecasted_load['Time'] = pd.to_datetime(forecasted_load['Time'], utc=True)
+    weather_load['time'] = pd.to_datetime(weather_load['time'], utc=True)
+
+    # Convert actual load to hourly (mean of 5-min intervals)
+    actual_hourly = actual_load.set_index('Time').resample('1h').agg({
+        'Load': ['mean', 'max', 'min']
+    }).reset_index()
+    actual_hourly.columns = ['Time', 'actual_load_mean', 'actual_load_max', 'actual_load_min']
+
+    # Forecasted load is already hourly
+    forecasted_hourly = forecasted_load[['Time', 'Load Forecast']].copy()
+    forecasted_hourly.columns = ['Time', 'forecast_load']
+
+    # Weather is already hourly, just rename
+    weather_hourly = weather_load.copy()
+    weather_hourly.columns = ['Time', 'temperature', 'cloudcover', 'precipitation']
+
+    # Merge all datasets on Time
+    aligned_data = actual_hourly.copy()
+    aligned_data = aligned_data.merge(forecasted_hourly, on='Time', how='left')
+    aligned_data = aligned_data.merge(weather_hourly, on='Time', how='left')
+
+    # Sort by time
+    aligned_data = aligned_data.sort_values('Time').reset_index(drop=True)
+    if debug:
+        print(f"Aligned dataset shape: {aligned_data.shape}")
+        print(f"Time range: {aligned_data['Time'].min()} to {aligned_data['Time'].max()}")
+        print(f"\nAligned data:\n{aligned_data.head(10)}")
+        print(f"\nMissing values:\n{aligned_data.isnull().sum()}")
+
+    aligned_data.to_csv('../data/aligned_data_hourly.csv', index=False)
+
+    return aligned_data
