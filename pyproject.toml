@@ -21,6 +21,7 @@ dependencies = [
     "ipykernel>=7.3.0",
     "noaa>=0.2.1",
     "noaa-sdk>=0.1.21",
+    "meteostat>=2.1.4",
 ]
 [tool.setuptools.packages.find]
 where = ["."]

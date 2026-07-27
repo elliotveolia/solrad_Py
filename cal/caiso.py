@@ -1,7 +1,7 @@
 import gridstatus
-from noaa_sdk import noaa
 from datetime import datetime
 import pandas as pd
+import requests
 
 
 def fetch_caiso_load_data(start_date, end_date):
@@ -77,10 +77,9 @@ def fetch_caiso_load_data(start_date, end_date):
         return None, None
 
 
-
 def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, save_path='../data/california_weather.csv'):
     """
-    Fetch weather data for central California from NOAA and save to file.
+    Fetch historical weather data for central California from Meteostat and save to file.
 
     Parameters:
     -----------
@@ -97,25 +96,49 @@ def get_california_weather(start_date, end_date, lat=37.2808, lon=-119.2945, sav
 
     Returns:
     --------
-    pd.DataFrame : Weather observations data
+    pd.DataFrame : Historical weather data
     """
 
-    observations = noaa.NoaaObservations()
-
     try:
-        obs = observations.query(lat=lat, lon=lon, output_format='json')
+        # Make sure dates are strings in YYYY-MM-DD format
+        if not isinstance(start_date, str):
+            start_date = start_date.strftime('%Y-%m-%d')
+        if not isinstance(end_date, str):
+            end_date = end_date.strftime('%Y-%m-%d')
+
+        print(f"Fetching data from {start_date} to {end_date}...")
+
+        # Open-Meteo API (free, no key required)
+        url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start_date}&end_date={end_date}&daily=temperature_2m_max,temperature_2m_min,cloudcover_mean,precipitation_sum&timezone=America/Los_Angeles"
+
+        response = requests.get(url)
+        data = response.json()
+
+        if response.status_code != 200:
+            print(f"Error: {data.get('reason', data.get('error', 'Unknown error'))}")
+            return None
+
+        if 'daily' not in data:
+            print("No daily data in response")
+            return None
 
         # Convert to DataFrame
-        df = pd.DataFrame(obs['features'])
+        df = pd.DataFrame({
+            'date': data['daily']['time'],
+            'temp_max': data['daily']['temperature_2m_max'],
+            'temp_min': data['daily']['temperature_2m_min'],
+            'cloudcover': data['daily']['cloudcover_mean'],
+            'precipitation': data['daily']['precipitation_sum']
+        })
 
-        # Save to CSV
         df.to_csv(save_path, index=False)
+        print(f"Retrieved {len(df)} days of data")
         print(f"Weather data saved to {save_path}")
 
         return df
 
     except Exception as e:
-        print(f"Error fetching weather data: {e}")
+        print(f"Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
-
-
