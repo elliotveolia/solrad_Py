@@ -352,25 +352,69 @@ def analyze_driving_variables(fire_impact_df):
     return analysis_df, model
 
 
-def prepare_training_data(actual_load, fire_impact, lookback_days=5):
+def prepare_training_data(actual_load, forecasted_load, weather_load, fire_impact, lookback_days=5):
     """
-    Prepare training data for the predictive model with normalized load values.
+    Prepare training data using percentage deviation from daily average.
     """
 
+    print("\n" + "=" * 80)
+    print("PREPARING TRAINING DATA")
+    print("=" * 80)
+
+    # Ensure proper datetime
     actual_load['Time'] = pd.to_datetime(actual_load['Time'], utc=True)
-    actual_load['date'] = actual_load['Time'].dt.date
+    forecasted_load['Time'] = pd.to_datetime(forecasted_load['Time'], utc=True)
+    weather_load['time'] = pd.to_datetime(weather_load['time'], utc=True)
 
-    # NORMALIZE load to 0-1 scale (use actual_load_mean from aligned data)
-    load_min = actual_load['actual_load_mean'].min()
-    load_max = actual_load['actual_load_mean'].max()
-    actual_load['Load_normalized'] = (actual_load['actual_load_mean'] - load_min) / (load_max - load_min)
+    print(f"\nActual load: {len(actual_load)} rows, {actual_load['Time'].min()} to {actual_load['Time'].max()}")
+    print(
+        f"Forecast load: {len(forecasted_load)} rows, {forecasted_load['Time'].min()} to {forecasted_load['Time'].max()}")
+    print(f"Weather: {len(weather_load)} rows, {weather_load['time'].min()} to {weather_load['time'].max()}")
 
-    # Store min/max for later denormalization
-    load_stats = {'min': load_min, 'max': load_max}
+    # Start with actual load
+    merged = actual_load[['Time', 'Load']].copy()
+    merged.rename(columns={'Load': 'actual_load'}, inplace=True)
+    print(f"\nAfter actual load: {len(merged)} rows")
 
-    print(f"Load normalization stats:")
-    print(f"  Min: {load_min:.2f}")
-    print(f"  Max: {load_max:.2f}")
+    # Add forecast - use most recent forecast for each time
+    forecast_latest = forecasted_load.sort_values('Publish Time').drop_duplicates('Time', keep='last')
+    forecast_merge = forecast_latest[['Time', 'Load Forecast']].copy()
+    forecast_merge.rename(columns={'Load Forecast': 'forecast_load'}, inplace=True)
+
+    merged = merged.merge(forecast_merge, on='Time', how='left')
+    print(f"After forecast merge: {len(merged)} rows, {merged['forecast_load'].notna().sum()} with forecast")
+
+    # Add weather - round to nearest hour for matching
+    weather_merge = weather_load[['time', 'temperature', 'cloudcover', 'humidity',
+                                  'solar_irradiance', 'smoke_aqi_proxy']].copy()
+    weather_merge.rename(columns={'time': 'Time'}, inplace=True)
+    weather_merge['Time'] = weather_merge['Time'].dt.round('1h')
+
+    merged['Time_rounded'] = merged['Time'].dt.round('1h')
+    merged = merged.merge(weather_merge, left_on='Time_rounded', right_on='Time', how='left', suffixes=('', '_weather'))
+    merged = merged.drop('Time_weather', axis=1)
+    print(f"After weather merge: {len(merged)} rows, {merged['temperature'].notna().sum()} with weather")
+
+    # Drop rows missing critical data
+    merged = merged.dropna(subset=['actual_load', 'forecast_load', 'temperature', 'solar_irradiance'])
+    print(f"After dropping NaN: {len(merged)} rows")
+
+    if len(merged) == 0:
+        print("ERROR: No data after merging!")
+        return None, None
+
+    # Calculate daily average
+    merged['date'] = merged['Time'].dt.date
+    daily_avg = merged.groupby('date')['actual_load'].transform('mean')
+
+    # Normalize as percentage deviation from daily average
+    merged['Load_normalized'] = ((merged['actual_load'] - daily_avg) / daily_avg) * 100
+
+    print(f"\nLoad normalization stats (% deviation from daily average):")
+    print(f"  Min: {merged['Load_normalized'].min():.2f}%")
+    print(f"  Max: {merged['Load_normalized'].max():.2f}%")
+    print(f"  Mean: {merged['Load_normalized'].mean():.2f}%")
+    print(f"  Std Dev: {merged['Load_normalized'].std():.2f}%")
 
     # Create fire indicator
     fire_dates = set()
@@ -382,34 +426,54 @@ def prepare_training_data(actual_load, fire_impact, lookback_days=5):
             fire_dates.add(current_date)
             current_date += timedelta(days=1)
 
-    actual_load['is_fire'] = actual_load['date'].isin(fire_dates).astype(int)
-
-    # Create lagged features (using normalized load)
-    for lag in [1, 6, 24]:
-        actual_load[f'actual_load_lag_{lag}h'] = actual_load['Load_normalized'].shift(lag)
-        actual_load[f'forecast_load_lag_{lag}h'] = actual_load['forecast_load'].shift(lag)
-
-    # Create rolling averages (using normalized load)
-    for window in [6, 24]:
-        actual_load[f'actual_load_rolling_{window}h'] = actual_load['Load_normalized'].rolling(window).mean()
-        actual_load[f'forecast_load_rolling_{window}h'] = actual_load['forecast_load'].rolling(window).mean()
+    merged['is_fire'] = merged['date'].isin(fire_dates).astype(int)
 
     # Extract time features
-    actual_load['hour'] = actual_load['Time'].dt.hour
-    actual_load['day_of_week'] = actual_load['Time'].dt.dayofweek
-    actual_load['month'] = actual_load['Time'].dt.month
+    merged['hour'] = merged['Time'].dt.hour
+    merged['day_of_week'] = merged['Time'].dt.dayofweek
+    merged['month'] = merged['Time'].dt.month
 
     # Create cyclical features
-    actual_load['hour_sin'] = np.sin(2 * np.pi * actual_load['hour'] / 24)
-    actual_load['hour_cos'] = np.cos(2 * np.pi * actual_load['hour'] / 24)
-    actual_load['day_sin'] = np.sin(2 * np.pi * actual_load['day_of_week'] / 7)
-    actual_load['day_cos'] = np.cos(2 * np.pi * actual_load['day_of_week'] / 7)
+    merged['hour_sin'] = np.sin(2 * np.pi * merged['hour'] / 24)
+    merged['hour_cos'] = np.cos(2 * np.pi * merged['hour'] / 24)
+    merged['day_sin'] = np.sin(2 * np.pi * merged['day_of_week'] / 7)
+    merged['day_cos'] = np.cos(2 * np.pi * merged['day_of_week'] / 7)
 
-    # Drop rows with NaN
-    training_data = actual_load.dropna(subset=['Load_normalized'])
+    # Create lagged features (using NORMALIZED load)
+    for lag in [1, 6, 24]:
+        merged[f'actual_load_lag_{lag}h'] = merged['Load_normalized'].shift(lag)
+        merged[f'forecast_load_lag_{lag}h'] = merged['forecast_load'].shift(lag)
+        merged[f'temperature_lag_{lag}h'] = merged['temperature'].shift(lag)
+        merged[f'solar_irradiance_lag_{lag}h'] = merged['solar_irradiance'].shift(lag)
 
-    print(f"Training data shape: {training_data.shape}")
+    # Create rolling averages (using NORMALIZED load)
+    for window in [6, 24]:
+        merged[f'actual_load_rolling_{window}h'] = merged['Load_normalized'].rolling(window).mean()
+        merged[f'forecast_load_rolling_{window}h'] = merged['forecast_load'].rolling(window).mean()
+
+    # Drop rows with NaN from lags/rolling
+    training_data = merged.dropna()
+
+    print(f"\nAfter creating lags/rolling: {len(training_data)} rows")
     print(f"Fire events: {training_data['is_fire'].sum()} hours")
+
+    if len(training_data) == 0:
+        print("ERROR: No training data after creating features!")
+        return None, None
+
+    # Store load stats for denormalization
+    load_stats = {
+        'min': merged['actual_load'].min(),
+        'max': merged['actual_load'].max(),
+        'mean': merged['actual_load'].mean(),
+        'std': merged['actual_load'].std()
+    }
+
+    print(f"\nLoad stats for denormalization:")
+    print(f"  Min: {load_stats['min']:.2f}")
+    print(f"  Max: {load_stats['max']:.2f}")
+    print(f"  Mean: {load_stats['mean']:.2f}")
+    print(f"  Std: {load_stats['std']:.2f}")
 
     return training_data, load_stats
 
@@ -419,7 +483,7 @@ def build_wildfire_load_model(training_data, model_type='random_forest'):
     Build a model to predict load during wildfire conditions.
     """
 
-    # Define features
+    # Define features - ONLY use features that will exist
     feature_cols = [
         'forecast_load', 'temperature', 'cloudcover', 'humidity', 'solar_irradiance', 'smoke_aqi_proxy',
         'is_fire', 'hour', 'day_of_week', 'month',
@@ -435,11 +499,21 @@ def build_wildfire_load_model(training_data, model_type='random_forest'):
     # Filter to only available columns
     available_features = [col for col in feature_cols if col in training_data.columns]
 
-    X = training_data[available_features]
-    y = training_data['Load_normalized']  # ← CHANGED TO NORMALIZED
+    print(f"\nFeatures used: {len(available_features)}/{len(feature_cols)}")
+    print(f"Available: {available_features}")
+    missing = set(feature_cols) - set(available_features)
+    if missing:
+        print(f"Missing: {missing}")
 
-    print(f"Features used: {len(available_features)}")
+    X = training_data[available_features].copy()
+    y = training_data['Load_normalized'].copy()  # Target is normalized
+
     print(f"Training samples: {len(X)}")
+    print(f"Target (Load_normalized) stats:")
+    print(f"  Min: {y.min():.2f}%")
+    print(f"  Max: {y.max():.2f}%")
+    print(f"  Mean: {y.mean():.2f}%")
+    print(f"  Std: {y.std():.2f}%")
 
     # Standardize features
     scaler = StandardScaler()
@@ -448,41 +522,42 @@ def build_wildfire_load_model(training_data, model_type='random_forest'):
     # Build model
     if model_type == 'random_forest':
         model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=20,
+            n_estimators=200,
+            max_depth=25,
             min_samples_split=5,
             min_samples_leaf=2,
             random_state=42,
-            n_jobs=-1
+            n_jobs=-1,
+            verbose=1
         )
     else:
         model = LinearRegression()
 
+    print("\nTraining model...")
     model.fit(X_scaled, y)
 
     # Calculate R-squared
     train_score = model.score(X_scaled, y)
     print(f"\nModel R-squared: {train_score:.4f}")
 
-    # Feature importance (for Random Forest)
+    # Feature importance
     if model_type == 'random_forest':
         feature_importance = pd.DataFrame({
             'feature': available_features,
             'importance': model.feature_importances_
         }).sort_values('importance', ascending=False)
 
-        print("\nTop 10 Most Important Features:")
-        print(feature_importance.head(10))
+        print("\nTop 15 Most Important Features:")
+        print(feature_importance.head(15).to_string())
 
     return model, scaler, available_features
-
 
 
 # Run alignment
 aligned_data = align_datasets(actual_load, forecasted_load, weather_load)
 fire_impact = quantify_fire_load_impact(actual_load, forecasted_load, weather_load, days=3)
 analysis_results, regression_model = analyze_driving_variables(fire_impact)
-training_data, load_stats = prepare_training_data(aligned_data, fire_impact)
+training_data, load_stats = prepare_training_data(actual_load, forecasted_load, weather_load, fire_impact)
 
 # Save load stats
 joblib.dump(load_stats, '../data/model/load_stats.pkl')

@@ -12,15 +12,15 @@ import plotly.graph_objects as go
 
 
 # Define scenario
-scenario_start = '2023-01-01'
-scenario_end = '2023-12-31'
-fire_start_date = '2023-08-15'
+scenario_start = '2026-01-01'
+scenario_end = '2026-07-27'
+fire_start_date = '2026-07-14 '
 fire_duration_days = 5
 
 # Location
-lat = 40.7128
-lon = -74.0060
-location_name = 'New_York'
+lat = 39.9526
+lon = -75.1652
+location_name = 'Philadelphia'
 timezone = 'America/New_York'
 
 print(f"Scenario: {scenario_start} to {scenario_end}")
@@ -170,7 +170,8 @@ predictions = predict_load_during_fire(
     scaler,
     feature_cols,
     fire_start,
-    prediction_days=fire_duration_days
+    prediction_days=fire_duration_days,
+    daily_avg_load=actual_load['Load'].mean()  # Add this
 )
 
 # Merge actual load into predictions - convert to same timezone
@@ -183,23 +184,19 @@ predictions = predictions.merge(actual_load_subset, on='Time', how='left')
 # DENORMALIZE PREDICTIONS TO TARGET ISO SCALE
 # ====================================================================
 
-# Load the California load stats (what the model was trained on)
-load_stats = joblib.load('data/model/load_stats.pkl')
-ca_load_min = load_stats['min']
-ca_load_max = load_stats['max']
-
-# Get target ISO load range
-load_min = actual_load['Load'].min()
-load_max = actual_load['Load'].max()
+# Calculate daily average from actual load
+daily_avg_target = actual_load['Load'].mean()
 
 print(f"\nDenormalizing predictions:")
-print(f"  California training range: {ca_load_min:.2f} - {ca_load_max:.2f}")
-print(f"  {location_name} target range: {load_min:.2f} - {load_max:.2f}")
+print(f"  Target ISO daily average load: {daily_avg_target:.2f} MW")
 
-# Denormalize predicted_load from 0-1 scale to target ISO scale
-predictions['predicted_load'] = (predictions['predicted_load'] * (load_max - load_min))
+# Convert percentage deviation back to absolute load
+# Formula: actual_load = daily_avg * (1 + normalized_percentage/100)
+predictions['predicted_load'] = daily_avg_target * (1 + predictions['predicted_load_normalized'] / 100)
 
 print("✓ Predictions denormalized to target ISO scale")
+print(f"\nPredicted load range: {predictions['predicted_load'].min():.2f} - {predictions['predicted_load'].max():.2f} MW")
+
 
 # ====================================================================
 # DISPLAY RESULTS
@@ -280,3 +277,27 @@ fig.write_html(plot_file)
 fig.show()
 
 print(f"\n✓ Plot saved to '{plot_file}'")
+
+# DEBUG: PREDICTED VS FORECAST COMPARISON
+# ====================================================================
+
+print("\n" + "=" * 80)
+print("DEBUG: PREDICTED VS FORECAST LOAD")
+print("=" * 80)
+
+print(f"\nPredicted Load:")
+print(f"  Min: {predictions['predicted_load'].min():.2f}")
+print(f"  Max: {predictions['predicted_load'].max():.2f}")
+print(f"  Mean: {predictions['predicted_load'].mean():.2f}")
+print(f"  Std Dev: {predictions['predicted_load'].std():.2f}")
+print(f"  Range: {predictions['predicted_load'].max() - predictions['predicted_load'].min():.2f}")
+
+print(f"\nForecast Load:")
+print(f"  Min: {predictions['forecast_load'].min():.2f}")
+print(f"  Max: {predictions['forecast_load'].max():.2f}")
+print(f"  Mean: {predictions['forecast_load'].mean():.2f}")
+print(f"  Std Dev: {predictions['forecast_load'].std():.2f}")
+print(f"  Range: {predictions['forecast_load'].max() - predictions['forecast_load'].min():.2f}")
+
+print(f"\nDetailed Comparison:")
+print(predictions[['Time', 'predicted_load', 'forecast_load']].to_string())
