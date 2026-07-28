@@ -186,14 +186,15 @@ predictions = predictions.merge(actual_load_subset, on='Time', how='left')
 # DENORMALIZE PREDICTIONS TO TARGET ISO SCALE
 # ====================================================================
 
-# Get daily average from actual load
-daily_avg_target = actual_load['Load'].mean()
+# Use the fire period's actual mean for denormalization (more accurate)
+daily_avg_target = actual_load_subset['actual_load'].mean()
 
 print(f"\nDenormalizing predictions:")
-print(f"  Target ISO daily average load: {daily_avg_target:.2f} MW")
+print(f"  Fire period daily average load: {daily_avg_target:.2f} MW")
 
 # Convert percentage deviation back to absolute load
 predictions['predicted_load'] = daily_avg_target * (1 + predictions['predicted_load_normalized'] / 100)
+
 
 print("✓ Predictions denormalized to target ISO scale")
 print(f"\nPredicted load range: {predictions['predicted_load'].min():.2f} - {predictions['predicted_load'].max():.2f} MW")
@@ -205,7 +206,6 @@ print(f"\nPredicted load range: {predictions['predicted_load'].min():.2f} - {pre
 # Shift predicted load values back 3 hours to align with actual
 predictions['predicted_load'] = predictions['predicted_load'].shift(-3)
 print("✓ Predicted load values shifted back 3 hours to align with actual load times")
-
 
 
 # ====================================================================
