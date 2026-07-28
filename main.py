@@ -180,6 +180,28 @@ actual_load_subset['Time'] = actual_load_subset['Time'].dt.tz_convert('UTC')
 predictions = predictions.merge(actual_load_subset, on='Time', how='left')
 
 # ====================================================================
+# DENORMALIZE PREDICTIONS TO TARGET ISO SCALE
+# ====================================================================
+
+# Load the California load stats (what the model was trained on)
+load_stats = joblib.load('data/model/load_stats.pkl')
+ca_load_min = load_stats['min']
+ca_load_max = load_stats['max']
+
+# Get target ISO load range
+load_min = actual_load['Load'].min()
+load_max = actual_load['Load'].max()
+
+print(f"\nDenormalizing predictions:")
+print(f"  California training range: {ca_load_min:.2f} - {ca_load_max:.2f}")
+print(f"  {location_name} target range: {load_min:.2f} - {load_max:.2f}")
+
+# Denormalize predicted_load from 0-1 scale to target ISO scale
+predictions['predicted_load'] = (predictions['predicted_load'] * (load_max - load_min))
+
+print("✓ Predictions denormalized to target ISO scale")
+
+# ====================================================================
 # DISPLAY RESULTS
 # ====================================================================
 print("\n" + "=" * 80)

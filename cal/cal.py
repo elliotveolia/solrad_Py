@@ -436,7 +436,7 @@ def build_wildfire_load_model(training_data, model_type='random_forest'):
     available_features = [col for col in feature_cols if col in training_data.columns]
 
     X = training_data[available_features]
-    y = training_data['actual_load_mean']
+    y = training_data['Load_normalized']  # ← CHANGED TO NORMALIZED
 
     print(f"Features used: {len(available_features)}")
     print(f"Training samples: {len(X)}")
@@ -475,6 +475,7 @@ def build_wildfire_load_model(training_data, model_type='random_forest'):
         print(feature_importance.head(10))
 
     return model, scaler, available_features
+
 
 
 # Run alignment
