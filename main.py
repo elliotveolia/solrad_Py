@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timedelta
 import pandas as pd
 import joblib
@@ -108,6 +109,7 @@ forecast_subset = fire_weather[
     (pd.to_datetime(fire_weather['time']) <= fire_end)
 ].copy()
 
+
 print(f"✓ Forecast subset: {len(forecast_subset)} rows")
 
 # Merge in forecast load data
@@ -184,18 +186,26 @@ predictions = predictions.merge(actual_load_subset, on='Time', how='left')
 # DENORMALIZE PREDICTIONS TO TARGET ISO SCALE
 # ====================================================================
 
-# Calculate daily average from actual load
+# Get daily average from actual load
 daily_avg_target = actual_load['Load'].mean()
 
 print(f"\nDenormalizing predictions:")
 print(f"  Target ISO daily average load: {daily_avg_target:.2f} MW")
 
 # Convert percentage deviation back to absolute load
-# Formula: actual_load = daily_avg * (1 + normalized_percentage/100)
 predictions['predicted_load'] = daily_avg_target * (1 + predictions['predicted_load_normalized'] / 100)
 
 print("✓ Predictions denormalized to target ISO scale")
 print(f"\nPredicted load range: {predictions['predicted_load'].min():.2f} - {predictions['predicted_load'].max():.2f} MW")
+
+# ====================================================================
+# ALIGN PREDICTIONS TO ACTUAL TIME (shift values, not time)
+# ====================================================================
+
+# Shift predicted load values back 3 hours to align with actual
+predictions['predicted_load'] = predictions['predicted_load'].shift(-3)
+print("✓ Predicted load values shifted back 3 hours to align with actual load times")
+
 
 
 # ====================================================================
@@ -278,26 +288,3 @@ fig.show()
 
 print(f"\n✓ Plot saved to '{plot_file}'")
 
-# DEBUG: PREDICTED VS FORECAST COMPARISON
-# ====================================================================
-
-print("\n" + "=" * 80)
-print("DEBUG: PREDICTED VS FORECAST LOAD")
-print("=" * 80)
-
-print(f"\nPredicted Load:")
-print(f"  Min: {predictions['predicted_load'].min():.2f}")
-print(f"  Max: {predictions['predicted_load'].max():.2f}")
-print(f"  Mean: {predictions['predicted_load'].mean():.2f}")
-print(f"  Std Dev: {predictions['predicted_load'].std():.2f}")
-print(f"  Range: {predictions['predicted_load'].max() - predictions['predicted_load'].min():.2f}")
-
-print(f"\nForecast Load:")
-print(f"  Min: {predictions['forecast_load'].min():.2f}")
-print(f"  Max: {predictions['forecast_load'].max():.2f}")
-print(f"  Mean: {predictions['forecast_load'].mean():.2f}")
-print(f"  Std Dev: {predictions['forecast_load'].std():.2f}")
-print(f"  Range: {predictions['forecast_load'].max() - predictions['forecast_load'].min():.2f}")
-
-print(f"\nDetailed Comparison:")
-print(predictions[['Time', 'predicted_load', 'forecast_load']].to_string())
