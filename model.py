@@ -1,15 +1,6 @@
 import pandas as pd
 import numpy as np
-
-from sklearn.linear_model import LinearRegression
-import joblib
 from datetime import datetime, timedelta
-
-
-
-
-
-
 
 def predict_load_during_fire(
         forecast_data,
@@ -47,7 +38,7 @@ def predict_load_during_fire(
     """
 
     # Prepare forecast data
-    forecast_data['Time'] = pd.to_datetime(forecast_data['time'], utc=True)
+    forecast_data['Time'] = pd.to_datetime(forecast_data['time'], )
     forecast_data['date'] = forecast_data['Time'].dt.date
     forecast_data['hour'] = forecast_data['Time'].dt.hour
     forecast_data['day_of_week'] = forecast_data['Time'].dt.dayofweek
