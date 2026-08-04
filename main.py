@@ -182,6 +182,7 @@ actual_load_subset['Time'] = actual_load_subset['Time'].dt.tz_convert('UTC')
 
 predictions = predictions.merge(actual_load_subset, on='Time', how='left')
 
+
 # ====================================================================
 # DENORMALIZE PREDICTIONS TO TARGET ISO SCALE
 # ====================================================================
@@ -231,6 +232,9 @@ print(f"  Load reduction: {load_reduction_pct:.2f}%")
 output_file = f'data/{location_name}_fire_predictions.csv'
 predictions.to_csv(output_file, index=False)
 print(f"\n✓ Predictions saved to '{output_file}'")
+
+
+
 
 # ====================================================================
 # PLOT PREDICTIONS
