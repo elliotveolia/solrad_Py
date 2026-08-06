@@ -570,5 +570,3 @@ joblib.dump(wildfire_model, '../data/model/wildfire_load_model.pkl')
 joblib.dump(scaler, '../data/model/wildfire_scaler.pkl')
 joblib.dump(feature_cols, '../data/model/wildfire_features.pkl')
 print("\n✓ Model saved!")
-
-
